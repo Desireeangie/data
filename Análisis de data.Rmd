@@ -1,0 +1,261 @@
+---
+title: "Factores que influyen en el desarrollo de la desigualdad de género a nivel global"
+author: "Angie Huamanchumo"
+subtitle: 'Curso: POL304 - Estadística para el análisis político 2'
+output: 
+  flexdashboard::flex_dashboard:
+    navbar:
+      - { icon: "fa-question-circle", href: "https://google.com", align: right }
+    orientation: columns
+    vertical_layout: fill
+    
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+```
+
+```{r include=FALSE}
+library(rio)
+library(ggplot2)
+library(DT)
+library(kableExtra)
+library(sf)
+library(modelsummary)
+```
+
+```{r include=FALSE}
+data = import("datafinal.xlsx")
+mapIDG=sf::read_sf("Mapa_paises_mundo.shp") #shapefile
+```
+
+```{r include=FALSE}
+data$IDG=as.numeric(data$IDG)
+data$participacion_politica=as.numeric(data$participacion_politica)
+data$secundariaC=as.numeric(data$secundariaC)
+data$participacion_laboral=as.numeric(data$participacion_laboral)
+data$violenciaMuj=as.numeric(data$violenciaMuj)
+data$inclusionFinan=as.numeric(data$inclusionFinan)
+data$Country=as.character(data$Country)
+data$libertadCir=as.numeric(data$libertadCir)
+data$accesoJus=as.numeric(data$accesoJus)
+```
+
+```{r include=FALSE}
+data$IDG = as.numeric(data$IDG)
+mapIDG2= merge(mapIDG, data, by = "CNTR_ID", all.x=T)
+```
+
+# Resultados índice de desigualdad
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Mapa del índice de desigualdad por país
+
+```{r}
+mapaleyendaL= ggplot(mapIDG2)+ geom_sf() + theme_light()
+
+mapaleyL= mapaleyendaL + geom_sf(data=mapIDG2,
+              aes(fill=IDG),color = "gray")
+      
+mapa = mapaleyL + coord_sf() + theme_void() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        legend.position = "bottom") + 
+  labs(fill = " ") + theme(legend.text = element_text(size = 10)) +
+  labs(title = "") +
+  theme(plot.title = element_text(color = "black",
+                                  size = 10,
+                                  face = "bold"))
+mapa
+
+```
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Tabla de resultados (índice por país)
+
+```{r include=FALSE}
+indice = data[,c(2,3)]
+```
+
+```{r echo=FALSE}
+datatable(indice)
+```
+
+
+
+
+
+
+
+# Agrupamiento de datos
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Tabla de resultados (Técnica divisiva)
+
+
+```{r include=FALSE}
+dataClus=data[,c(4:10)]
+row.names(dataClus)=data$Country
+```
+
+```{r include=FALSE}
+library(cluster)
+g.dist = daisy(dataClus, metric="gower")
+```
+
+```{r include=FALSE}
+library(factoextra)
+library(cluster)
+set.seed(123)
+res.diana <- hcut(g.dist, k = 2,hc_func='diana')
+data$diana=res.diana$cluster
+
+```
+
+```{r echo=FALSE}
+library(dplyr)
+a=data %>% group_by(diana) %>%
+  summarize(PARPOL = mean(participacion_politica, na.rm = T),
+            PARLAB = mean(participacion_laboral, na.rm = T),
+            SECUN = mean(secundariaC, na.rm =T),
+            VIOLENC = mean(violenciaMuj, na.rm = T),
+            INCLU_F = mean(inclusionFinan, na.rm = T),
+            CIRCU = mean(libertadCir, na.rm = T),
+            JUST = mean(accesoJus, na.rm = T))
+
+datatable(a)
+
+```
+
+Column {data-width=500} {.tabset}
+-----------------------------------------------------------------------
+
+### Gráfica de la técnica de diana
+
+```{r include=FALSE}
+data$diana = factor(data$diana)
+mapIDG3= merge(mapIDG, data, by = "CNTR_ID", all.x=T)
+```
+
+```{r echo=FALSE,message=FALSE,eval=TRUE}
+# Crear el mapa
+mapaleyendaL= ggplot(mapIDG3)+ geom_sf() + theme_light()
+
+mapaleyL= mapaleyendaL + geom_sf(data=mapIDG3,
+              aes(fill=diana),color = "gray")
+      
+mapa1= mapaleyL +
+coord_sf() + 
+scale_fill_manual(values=c("firebrick","dodgerblue2")) + theme_void() +
+  
+  
+theme(axis.title = element_blank(), axis.text = element_blank(), legend.position = "bottom") + labs(fill=" ") + theme(legend.text = element_text(size = 8)) +
+  
+labs(title = "") +
+  
+theme(
+plot.title = element_text(color="black", size=11, face="bold"))
+
+mapa1
+```
+
+### Gráfica de barras
+
+```{r}
+data$diana <- as.numeric(data$diana)
+
+# Crea un gráfico de barras más bonito
+ggplot(data, aes(x = factor(diana), fill = factor(diana))) +
+  geom_bar(color = "black", size = 0.5, position = "stack", show.legend = FALSE) +
+  labs(title = "Número de Países en Cada Conglomerado",
+       x = "Número de Conglomerado",
+       y = "Número de Países") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 1),
+        axis.title = element_text(face = "bold", size = 12),
+        plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        legend.position = "none") +
+  scale_fill_brewer(palette = "Set")
+```
+
+
+# Modelando las variables
+
+```{r include=FALSE}
+colnames(data)[3] = "IDG"
+```
+
+```{r include=FALSE}
+modelo = lm(IDG ~ participacion_politica + participacion_laboral, data = data)
+
+modelo1 = lm(IDG ~ secundariaC + inclusionFinan + libertadCir, data = data)
+
+modelo2 = lm(IDG ~ violenciaMuj + accesoJus, data = data)
+
+modelof = lm(IDG ~ participacion_politica + participacion_laboral + secundariaC +
+               inclusionFinan + libertadCir + 
+               violenciaMuj + accesoJus, data = data)
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### OLS
+
+```{r}
+models=list('IDGP[1]'=modelo,
+            'IDGP[2]'=modelo1,
+            'IDGP[3]'=modelo2,
+            'IDGP[4]'=modelof )
+modelsummary(models, title = "Resultados de todos los modelos",
+             stars = TRUE,
+             output = "kableExtra")
+```
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+```{r include=FALSE}
+dontselect=c("Country","IDG", "CNTR_ID")
+select=setdiff(names(data),dontselect) 
+theData=data[,select]
+
+# usaremos:
+
+head(theData,10)%>%
+    rmarkdown::paged_table()
+```
+
+```{r include=FALSE}
+varParticipacion = c("participacion_politica", "participacion_laboral")
+varSeguridad = c("violenciaMuj", "accesoJus")
+varPosibilidades = c("secundariaC", "inclusionFinan","libertadCir")
+
+
+subset=theData[,c(varParticipacion,varSeguridad,varPosibilidades)]
+```
+
+```{r}
+library(polycor)
+corMatrix=polycor::hetcor(subset)$correlations
+```
+
+### OLS
+
+```{r}
+library(ggcorrplot)
+ggcorrplot(corMatrix)
+```
+
